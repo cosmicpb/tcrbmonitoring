@@ -72,7 +72,6 @@ def append_to_csv(data):
 def run():
     scraped_data = scrape_data()
     append_to_csv(scraped_data)  # Chamar a função corretamente
-    print(scraped_data)
 
 if __name__ == "__main__":
     run()
