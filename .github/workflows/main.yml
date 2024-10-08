@@ -2,7 +2,7 @@ name: Run Capture Star Data
 
 on:
   schedule:
-    - cron: '*/30 * * * *' 
+    - cron: '0,46 * * * *' 
 
 jobs:
   run:
