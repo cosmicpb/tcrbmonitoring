@@ -1,0 +1,26 @@
+name: Run Capture Star Data
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' 
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run capture_star_data.py
+        run: python capture_star_data.py
+
