@@ -28,6 +28,7 @@ def scrape_data():
     # Pegar os dados: JD (Julian Date), Magnitude, Error, Filter, Observer
     julian_date = cells[2].text.strip()
     magnitude = cells[4].text.strip()
+    error = cells[5].text.strip()
     filter_used = cells[6].text.strip()
     observer = cells[7].text.strip()
 
@@ -40,7 +41,7 @@ def scrape_data():
     hour_str = t.datetime.strftime("%H:%M")
 
     # Retornar os dados raspados e formatados
-    return [date_str, hour_str, magnitude, filter_used, observer]
+    return [date_str, hour_str, magnitude, error, filter_used, observer]
 
 # Função para adicionar os dados no CSV
 def append_to_csv(data):
@@ -49,13 +50,13 @@ def append_to_csv(data):
 
     # Se o arquivo não existe, criar com o cabeçalho
     if not file_exists:
-        with open(csv_file, mode='w', newline='', encoding='utf-8-sig') as file:  # Adiciona a codificação correta
+        with open(csv_file, mode='w', newline='', encoding='ISO-8859-1') as file:  # Mudança de codificação
             writer = csv.writer(file)
-            writer.writerow(["date", "hour", "magnitude", "filter", "observer"])  # Cabeçalho
+            writer.writerow(["date", "hour", "magnitude", "error", "filter", "observer"])  # Cabeçalho
             print("Cabeçalho adicionado ao CSV.")
 
     # Verificar se o dado já está no CSV para evitar duplicatas
-    with open(csv_file, mode='r', encoding='utf-8-sig') as file:  # Adiciona a codificação correta
+    with open(csv_file, mode='r', encoding='ISO-8859-1') as file:  # Mudança de codificação
         reader = csv.reader(file)
         for row in reader:
             if row and row[0] == data[0] and row[1] == data[1]:  # Comparando data e hora
@@ -63,7 +64,7 @@ def append_to_csv(data):
                 return
 
     # Se o dado for novo, adicionar ao CSV com a quebra de linha correta
-    with open(csv_file, mode='a', newline='', encoding='utf-8-sig') as file:  # Adiciona a codificação correta
+    with open(csv_file, mode='a', newline='', encoding='ISO-8859-1') as file:  # Mudança de codificação
         writer = csv.writer(file)
         writer.writerow(data)  # Escrever os dados como uma nova linha no CSV
         print("Dado adicionado ao CSV:", data)
