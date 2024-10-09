@@ -50,13 +50,13 @@ def append_to_csv(data):
 
     # Se o arquivo não existe, criar com o cabeçalho
     if not file_exists:
-        with open(csv_file, mode='w', newline='') as file:
+        with open(csv_file, mode='w', newline='', encoding='utf-8-sig') as file:  # Adiciona a codificação correta
             writer = csv.writer(file)
             writer.writerow(["date", "hour", "magnitude", "error", "filter", "observer"])  # Cabeçalho
             print("Cabeçalho adicionado ao CSV.")
 
     # Verificar se o dado já está no CSV para evitar duplicatas
-    with open(csv_file, mode='r') as file:
+    with open(csv_file, mode='r', encoding='utf-8-sig') as file:  # Adiciona a codificação correta
         reader = csv.reader(file)
         for row in reader:
             if row and row[0] == data[0] and row[1] == data[1]:  # Comparando data e hora
@@ -64,7 +64,7 @@ def append_to_csv(data):
                 return
 
     # Se o dado for novo, adicionar ao CSV com a quebra de linha correta
-    with open(csv_file, mode='a', newline='') as file:
+    with open(csv_file, mode='a', newline='', encoding='utf-8-sig') as file:  # Adiciona a codificação correta
         writer = csv.writer(file)
         writer.writerow(data)  # Escrever os dados como uma nova linha no CSV
         print("Dado adicionado ao CSV:", data)
