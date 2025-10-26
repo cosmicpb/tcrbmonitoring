@@ -1,10 +1,10 @@
 # T CrB Monitoring
 
-Sistema de monitoramento de observações da estrela variável T CrB (T Coronae Borealis) através do portal da AAVSO (American Association of Variable Star Observers).
+Sistema de monitoramento automático da estrela variável T Coronae Borealis (T CrB) através do portal AAVSO.
 
-## 🌟 Sobre o Projeto
+## 🌟 Sobre
 
-Este projeto realiza web scraping periódico dos dados de magnitude da estrela T CrB, armazenando as observações mais recentes em um banco de dados SQLite. O sistema está preparado para deploy na Cloudflare Workers para execução automatizada na nuvem.
+Este projeto realiza web scraping periódico dos dados de magnitude da estrela T CrB, armazenando as observações em um banco de dados PostgreSQL. O sistema executa automaticamente a cada hora para coletar novos dados.
 
 ### Por que T CrB?
 
@@ -12,111 +12,122 @@ T Coronae Borealis é uma estrela variável do tipo nova recorrente, conhecida p
 
 ## 📊 Dados Coletados
 
-Para cada observação, são extraídos os seguintes campos:
+Para cada observação, são extraídos:
 - **Star**: Nome da estrela (T CrB)
 - **JD**: Data Juliana (Julian Date)
 - **Calendar Date**: Data no formato de calendário
-- **Magnitude**: Magnitude observada da estrela
+- **Magnitude**: Magnitude observada
 - **Error**: Margem de erro da medição
-- **Filter**: Filtro utilizado na observação
+- **Filter**: Filtro utilizado
 - **Observer**: Código do observador
-- **Timestamp**: Data/hora da coleta dos dados
-
-## 📁 Estrutura do Projeto
-
-```
-tcrbmonitoring/
-├── src/
-│   ├── scraper.js      # Script principal de scraping
-│   ├── database.js     # Gerenciamento do banco SQLite
-│   ├── index.js        # Ponto de entrada principal
-│   ├── scheduler.js    # Execução periódica local
-│   ├── worker.js       # Worker para Cloudflare
-│   ├── view-data.js    # Visualizador de dados
-│   └── test.js         # Testes
-├── data/
-│   ├── observations.db  # Banco de dados SQLite
-│   └── observations.csv # Backup em CSV
-├── package.json
-├── wrangler.toml.example # Configuração Cloudflare
-├── DEPLOY.md           # Guia de deploy
-├── .gitignore
-└── README.md
-```
+- **Scraped At**: Timestamp da coleta
 
 ## 🚀 Instalação
 
+### Pré-requisitos
+
+- Python 3.8+
+- PostgreSQL 12+
+
+### Passos
+
 1. Clone o repositório:
 ```bash
-git clone <seu-repositorio>
+git clone https://github.com/cosmicpb/tcrbmonitoring.git
 cd tcrbmonitoring
 ```
 
-2. Instale as dependências:
+2. Crie um ambiente virtual:
 ```bash
-npm install
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# ou
+venv\Scripts\activate  # Windows
 ```
 
-## 💻 Uso Local
-
-### Executar uma coleta única:
+3. Instale as dependências:
 ```bash
-npm run dev
+pip install -r requirements.txt
 ```
 
-### Executar apenas o scraper (sem banco):
+4. Configure o banco de dados:
 ```bash
-npm run scrape
+# Crie o banco no PostgreSQL
+createdb tcrb_monitoring
+
+# Copie e configure o arquivo .env
+cp .env.example .env
+# Edite .env com suas credenciais
 ```
 
-### Executar testes:
+## 💻 Uso
+
+### Executar uma coleta única
+
 ```bash
-npm run test
+python monitor.py
 ```
 
-### Visualizar dados coletados:
+### Executar monitoramento contínuo (a cada hora)
+
 ```bash
-npm run view
+python scheduler.py
 ```
 
-### Exportar dados para CSV:
+### Testar apenas o scraper
+
 ```bash
-npm run export
+python scraper.py
 ```
 
-### Executar monitoramento periódico (a cada hora):
+### Verificar banco de dados
+
 ```bash
-npm start
+python database.py
 ```
 
 ## 🗄️ Banco de Dados
-
-O sistema usa SQLite para armazenar as observações localmente. O banco é criado automaticamente em `data/observations.db` na primeira execução.
 
 ### Estrutura da Tabela
 
 ```sql
 CREATE TABLE observations (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  star TEXT NOT NULL,
-  jd TEXT NOT NULL UNIQUE,
-  calendar_date TEXT NOT NULL,
-  magnitude TEXT NOT NULL,
-  error TEXT,
-  filter TEXT NOT NULL,
-  observer TEXT NOT NULL,
-  scraped_at TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    id SERIAL PRIMARY KEY,
+    star VARCHAR(50) NOT NULL,
+    jd VARCHAR(50) NOT NULL UNIQUE,
+    calendar_date VARCHAR(100) NOT NULL,
+    magnitude VARCHAR(50) NOT NULL,
+    error VARCHAR(50),
+    filter VARCHAR(50) NOT NULL,
+    observer VARCHAR(50) NOT NULL,
+    scraped_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-## ☁️ Deploy na Cloudflare Workers
+### Consultas Úteis
 
-Para deploy na Cloudflare Workers com execução periódica automatizada, consulte o guia completo em [`DEPLOY.md`](DEPLOY.md:1).
+```sql
+-- Total de observações
+SELECT COUNT(*) FROM observations;
 
-### Resumo rápido:
+-- Últimas 10 observações
+SELECT * FROM observations ORDER BY jd DESC LIMIT 10;
 
-1. Instale o Wrangler CLI:
+-- Observações por filtro
+SELECT filter, COUNT(*) FROM observations GROUP BY filter;
+
+-- Magnitude média (excluindo limites superiores)
+SELECT AVG(CAST(magnitude AS FLOAT)) 
+FROM observations 
+WHERE magnitude NOT LIKE '%<%';
+```
+
+## ☁️ Deploy na Cloudflare
+
+### Usando Cloudflare Workers + D1
+
+1. Instale Wrangler:
 ```bash
 npm install -g wrangler
 ```
@@ -126,64 +137,99 @@ npm install -g wrangler
 wrangler login
 ```
 
-3. Configure o projeto:
+3. Crie banco D1:
 ```bash
-cp wrangler.toml.example wrangler.toml
+wrangler d1 create tcrb-observations
 ```
 
-4. Faça o deploy:
+4. Configure wrangler.toml com o database_id retornado
+
+5. Crie a tabela:
+```bash
+wrangler d1 execute tcrb-observations --file=schema.sql
+```
+
+6. Deploy:
 ```bash
 wrangler deploy
 ```
 
-O worker será executado automaticamente a cada hora via Cron Triggers.
+### Usando Cloudflare Workers + PostgreSQL Externo
+
+Configure a connection string no wrangler.toml:
+```toml
+[vars]
+DATABASE_URL = "postgresql://user:pass@host:port/db"
+```
+
+## 🔄 Automação
+
+### Usando Cron (Linux/Mac)
+
+```bash
+# Editar crontab
+crontab -e
+
+# Adicionar linha para executar a cada hora
+0 * * * * cd /path/to/tcrbmonitoring && /path/to/venv/bin/python monitor.py >> /var/log/tcrb.log 2>&1
+```
+
+### Usando Systemd (Linux)
+
+Crie `/etc/systemd/system/tcrb-monitor.service`:
+
+```ini
+[Unit]
+Description=T CrB Monitoring Service
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=seu_usuario
+WorkingDirectory=/path/to/tcrbmonitoring
+Environment="PATH=/path/to/venv/bin"
+ExecStart=/path/to/venv/bin/python scheduler.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Ative o serviço:
+```bash
+sudo systemctl enable tcrb-monitor
+sudo systemctl start tcrb-monitor
+sudo systemctl status tcrb-monitor
+```
 
 ## 📈 Exemplo de Saída
 
 ```
-=== T CrB Monitoring System ===
-Iniciado em: 25/10/2025, 20:43:29
+============================================================
+T CrB Monitoring System
+============================================================
+Buscando dados de https://apps.aavso.org/webobs/results/...
+✓ Dados extraídos: T CRB - Magnitude: 9.9
+✓ Conectado ao banco de dados PostgreSQL
+✓ Tabelas criadas/verificadas com sucesso
+✓ Nova observação salva com sucesso!
+   ID: 42
+   JD: 2460974.152
+   Data: 2025 Oct. 25.65200
+   Magnitude: 9.9
 
-Banco de dados inicializado: /path/to/observations.db
-Buscando dados da AAVSO...
-✓ Nova observação registrada no banco de dados (ID: 1)
-
-Estatísticas: 1 observações no banco
-Última magnitude: <4.9
-
-Resultado: saved
+📊 Total de observações: 42
 ```
 
-## 🔍 Visualização de Dados
+## 🛠️ Tecnologias
 
-```
-=== Visualizador de Dados T CrB ===
-
-📊 Estatísticas:
-   Total de observações: 1
-   Última observação: 2025 Oct. 25.65200
-   Magnitude atual: <4.9
-
-📋 Últimas 10 observações:
-────────────────────────────────────────────────────────────────────
-ID  | JD           | Data              | Magnitude | Filtro | Observador
-────────────────────────────────────────────────────────────────────
-1   | 2460974.152  | 2025 Oct. 25.65200| <4.9      | Vis.   | MQA
-────────────────────────────────────────────────────────────────────
-```
-
-## 🌐 Fonte dos Dados
-
-Os dados são coletados do portal oficial da AAVSO:
-https://apps.aavso.org/webobs/results/?star=t+crb
-
-## 🛠️ Tecnologias Utilizadas
-
-- **Node.js** - Runtime JavaScript
-- **Cheerio** - Parser HTML para web scraping
-- **Better-SQLite3** - Banco de dados SQLite
-- **Cloudflare Workers** - Plataforma serverless para deploy
-- **Cloudflare D1** - Banco de dados SQL na nuvem (opcional)
+- **Python 3.8+**
+- **BeautifulSoup4** - Parsing HTML
+- **Requests** - HTTP requests
+- **PostgreSQL** - Banco de dados
+- **psycopg2** - Driver PostgreSQL
+- **schedule** - Agendamento de tarefas
+- **python-dotenv** - Gerenciamento de variáveis de ambiente
 
 ## 📝 Licença
 
@@ -191,8 +237,13 @@ MIT
 
 ## 🤝 Contribuindo
 
-Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou pull requests.
+Contribuições são bem-vindas! Abra uma issue ou pull request.
 
 ## 📧 Contato
 
 Para dúvidas ou sugestões, abra uma issue no repositório.
+
+## 🌐 Fonte dos Dados
+
+Dados coletados do portal oficial da AAVSO:
+https://apps.aavso.org/webobs/results/?star=t+crb
