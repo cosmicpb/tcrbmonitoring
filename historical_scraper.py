@@ -157,12 +157,8 @@ def scrape_page(page_num, retry_count=0):
         
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Encontra a tabela de observações (tenta várias formas)
+        # Encontra a tabela de observações com class='observations'
         table = soup.find('table', class_='observations')
-        
-        # Se não encontrou, tenta encontrar qualquer tabela
-        if not table:
-            table = soup.find('table')
         
         if not table:
             print(f"\r   ⚠️  Nenhuma tabela encontrada na página" + " " * 40)
@@ -175,27 +171,43 @@ def scrape_page(page_num, retry_count=0):
         if len(rows) > 0:
             rows = rows[1:]
         
-        for row in rows:
-            cols = row.find_all('td')
-            if len(cols) >= 4:
-                date_original = cols[0].text.strip()
-                magnitude = cols[1].text.strip()
-                observer = cols[2].text.strip() if len(cols) > 2 else "Unknown"
-                obs_type = cols[3].text.strip() if len(cols) > 3 else "vis"
+        # Cada observação ocupa 2 linhas: dados principais + detalhes
+        # Vamos processar apenas as linhas ímpares (dados principais)
+        for i in range(0, len(rows), 2):
+            if i >= len(rows):
+                break
                 
+            row = rows[i]
+            cols = row.find_all('td')
+            
+            # Precisa ter pelo menos 8 colunas (conforme cabeçalho)
+            if len(cols) >= 8:
                 try:
+                    # Colunas: '', 'Star', 'JD', 'Calendar Date', 'Magnitude', 'Error', 'Filter', 'Observer', ''
+                    star = cols[1].text.strip()
+                    date_jd = cols[2].text.strip()
+                    date_calendar = cols[3].text.strip()
+                    magnitude = cols[4].text.strip()
+                    error = cols[5].text.strip()
+                    filter_type = cols[6].text.strip()
+                    observer = cols[7].text.strip()
+                    
+                    # Converte magnitude para float
                     mag_float = float(magnitude)
-                    date_br = parse_calendar_date(date_original)
+                    
+                    # Usa a data JD para conversão
+                    date_br = parse_calendar_date(date_jd)
                     
                     observations.append({
-                        'star': 'T CrB',
-                        'date_original': date_original,
+                        'star': star,
+                        'date_original': date_jd,
                         'date_br': date_br,
                         'magnitude': mag_float,
                         'observer': observer,
-                        'obs_type': obs_type
+                        'obs_type': filter_type
                     })
-                except ValueError:
+                except (ValueError, IndexError) as e:
+                    # Ignora linhas com dados inválidos
                     continue
         
         return observations
