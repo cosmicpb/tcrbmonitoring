@@ -1,0 +1,30 @@
+# Configuração do Cloudflare Worker - Scraper T CrB
+
+name = "tcrb-scraper"
+main = "scraper-worker.py"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["python_workers"]
+
+# Cron Trigger - Executa a cada hora
+[triggers]
+crons = ["0 * * * *"]
+
+# Variáveis de ambiente
+[vars]
+ENVIRONMENT = "production"
+WORKER_TYPE = "scraper"
+
+# Observability - Logs
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "tcrb-observations"
+database_id = "6440d190-a746-4b7a-8906-17cab3fe2df7"

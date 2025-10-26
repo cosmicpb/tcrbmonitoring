@@ -1,0 +1,28 @@
+# Configuração do Cloudflare Worker - API T CrB
+
+name = "tcrb-api"
+main = "api-worker.py"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["python_workers"]
+
+# Sem Cron Trigger - apenas HTTP
+
+# Variáveis de ambiente
+[vars]
+ENVIRONMENT = "production"
+WORKER_TYPE = "api"
+
+# Observability - Logs
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+
+# D1 Database (mesmo banco do scraper)
+[[d1_databases]]
+binding = "DB"
+database_name = "tcrb-observations"
+database_id = "6440d190-a746-4b7a-8906-17cab3fe2df7"
