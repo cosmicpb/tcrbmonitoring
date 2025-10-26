@@ -8,11 +8,12 @@ import requests
 from bs4 import BeautifulSoup
 import sqlite3
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
+import threading
 
 # Configurações
-BASE_URL = "https://www.aavso.org/apps/webobs/results/?star=T+CrB&num_results=200&obs_types=vis&page="
+BASE_URL = "https://apps.aavso.org/webobs/results/?star=t+crb&num_results=200&obs_types=all&page="
 DELAY_BETWEEN_REQUESTS = 1  # segundos entre requisições
 MAX_RETRIES = 3  # número máximo de tentativas por página
 DB_PATH = "data/tcrb_observations.db"
@@ -80,39 +81,99 @@ def parse_calendar_date(date_str):
 def get_total_pages():
     """Descobre o número total de páginas disponíveis"""
     try:
-        response = requests.get(BASE_URL + "1", timeout=10)
+        response = requests.get(BASE_URL + "1", timeout=30)
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Procura pelo último link de paginação
-        pagination = soup.find('div', class_='pagination')
-        if pagination:
-            links = pagination.find_all('a')
-            if links:
-                # Pega o penúltimo link (último é "Next")
-                last_page_link = links[-2].get('href', '')
-                if 'page=' in last_page_link:
-                    return int(last_page_link.split('page=')[-1])
+        # Procura pela div com class="pages"
+        pages_div = soup.find('div', class_='pages')
+        if pages_div:
+            # Procura todos os links dentro da div
+            links = pages_div.find_all('a', href=True)
+            max_page = 1
+            
+            for link in links:
+                href = link.get('href', '')
+                # Extrai o número da página da URL
+                if 'page=' in href:
+                    try:
+                        page_num = int(href.split('page=')[-1].split('&')[0])
+                        if page_num > max_page:
+                            max_page = page_num
+                    except ValueError:
+                        continue
+            
+            if max_page > 1:
+                return max_page
         
-        return 1
+        # Fallback: procura em todos os links da página
+        all_links = soup.find_all('a', href=True)
+        max_page = 1
+        
+        for link in all_links:
+            href = link.get('href', '')
+            if 'page=' in href and 'star=t+crb' in href.lower():
+                try:
+                    page_num = int(href.split('page=')[-1].split('&')[0])
+                    if page_num > max_page:
+                        max_page = page_num
+                except ValueError:
+                    continue
+        
+        return max_page if max_page > 0 else 1
+        
     except Exception as e:
         print(f"❌ Erro ao descobrir total de páginas: {e}")
+        print("⚠️  Usando página 1 como padrão. Você pode especificar manualmente.")
         return 1
 
 def scrape_page(page_num, retry_count=0):
     """Coleta dados de uma página específica com retry automático"""
     url = BASE_URL + str(page_num)
     
+    # Variável para controlar o timeout visual
+    request_start = time.time()
+    timeout_duration = 30
+    request_done = False
+    
+    def show_timeout_progress():
+        """Mostra progresso do timeout em tempo real"""
+        while not request_done:
+            elapsed = time.time() - request_start
+            if elapsed >= timeout_duration:
+                break
+            remaining = timeout_duration - elapsed
+            print(f"\r   ⏳ Aguardando resposta do servidor... {remaining:.1f}s restantes", end="", flush=True)
+            time.sleep(0.1)
+    
+    # Inicia thread para mostrar progresso
+    progress_thread = threading.Thread(target=show_timeout_progress, daemon=True)
+    progress_thread.start()
+    
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=timeout_duration)
+        request_done = True
+        request_time = time.time() - request_start
+        print(f"\r   ✅ Resposta recebida em {request_time:.2f}s" + " " * 40)
+        
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Encontra a tabela de observações
+        # Encontra a tabela de observações (tenta várias formas)
         table = soup.find('table', class_='observations')
+        
+        # Se não encontrou, tenta encontrar qualquer tabela
         if not table:
+            table = soup.find('table')
+        
+        if not table:
+            print(f"\r   ⚠️  Nenhuma tabela encontrada na página" + " " * 40)
             return []
         
         observations = []
-        rows = table.find_all('tr')[1:]  # Pula o cabeçalho
+        rows = table.find_all('tr')
+        
+        # Pula o cabeçalho (primeira linha)
+        if len(rows) > 0:
+            rows = rows[1:]
         
         for row in rows:
             cols = row.find_all('td')
@@ -140,13 +201,15 @@ def scrape_page(page_num, retry_count=0):
         return observations
     
     except Exception as e:
+        request_done = True
+        print(f"\r   ❌ Erro: {str(e)[:80]}" + " " * 40)
         if retry_count < MAX_RETRIES:
-            print(f"⚠️  Erro na tentativa {retry_count + 1}/{MAX_RETRIES + 1}: {e}")
-            print(f"   Tentando novamente em 2 segundos...")
+            print(f"   ⚠️  Tentativa {retry_count + 1}/{MAX_RETRIES + 1} falhou")
+            print(f"   🔄 Tentando novamente em 2 segundos...")
             time.sleep(2)
             return scrape_page(page_num, retry_count + 1)
         else:
-            print(f"❌ Erro após {MAX_RETRIES + 1} tentativas na página {page_num}: {e}")
+            print(f"   ❌ Falha após {MAX_RETRIES + 1} tentativas na página {page_num}")
             return []
 
 def save_observations(observations):
@@ -196,6 +259,30 @@ def main():
     print("Descobrindo número total de páginas...")
     total_pages = get_total_pages()
     print(f"✅ Total de páginas encontradas: {total_pages:,}")
+    
+    # Se detectou apenas 1 página, pergunta se quer especificar manualmente
+    if total_pages == 1:
+        print()
+        print("⚠️  Apenas 1 página foi detectada automaticamente.")
+        print("   Isso pode estar incorreto. Você pode:")
+        print("   1. Continuar com 1 página")
+        print("   2. Especificar o número total de páginas manualmente")
+        print()
+        
+        choice = input("Escolha uma opção (1 ou 2): ").strip()
+        if choice == '2':
+            while True:
+                try:
+                    manual_pages = input("Digite o número total de páginas: ").strip()
+                    total_pages = int(manual_pages)
+                    if total_pages > 0:
+                        print(f"✅ Usando {total_pages:,} páginas")
+                        break
+                    else:
+                        print("⚠️  Por favor, digite um número maior que 0")
+                except ValueError:
+                    print("⚠️  Por favor, digite um número válido")
+    
     print(f"📊 Estimativa de observações: ~{total_pages * 200:,}")
     print()
     
@@ -205,20 +292,26 @@ def main():
     print("  2. Escolher página inicial")
     print()
     
-    choice = input("Escolha uma opção (1 ou 2): ").strip()
-    
-    start_page = 1
-    if choice == '2':
-        while True:
-            try:
-                page_input = input(f"Digite a página inicial (1-{total_pages}): ").strip()
-                start_page = int(page_input)
-                if 1 <= start_page <= total_pages:
-                    break
-                else:
-                    print(f"⚠️  Por favor, digite um número entre 1 e {total_pages}")
-            except ValueError:
-                print("⚠️  Por favor, digite um número válido")
+    while True:
+        choice = input("Escolha uma opção (1 ou 2): ").strip()
+        
+        if choice == '1':
+            start_page = 1
+            break
+        elif choice == '2':
+            while True:
+                try:
+                    page_input = input(f"Digite a página inicial (1-{total_pages}): ").strip()
+                    start_page = int(page_input)
+                    if 1 <= start_page <= total_pages:
+                        break
+                    else:
+                        print(f"⚠️  Por favor, digite um número entre 1 e {total_pages}")
+                except ValueError:
+                    print("⚠️  Por favor, digite um número válido")
+            break
+        else:
+            print("⚠️  Por favor, escolha 1 ou 2")
     
     pages_to_collect = total_pages - start_page + 1
     print()
@@ -250,33 +343,82 @@ def main():
     # Coleta dados
     total_collected = 0
     total_saved = 0
+    total_duplicates = 0
+    total_errors = 0
     start_time = time.time()
     
+    print()
+    
     for page in range(start_page, total_pages + 1):
-        print(f"Coletando página {page}...", end=" ", flush=True)
+        page_start = time.time()
+        
+        print(f"{'='*70}")
+        print(f"📄 PÁGINA {page:,} de {total_pages:,}")
+        print(f"{'='*70}")
         
         observations = scrape_page(page)
-        saved = save_observations(observations)
         
-        total_collected += len(observations)
-        total_saved += saved
+        if not observations:
+            total_errors += 1
+            print(f"   ⚠️  Nenhuma observação coletada (possível erro)")
+        else:
+            saved = save_observations(observations)
+            duplicates = len(observations) - saved
+            
+            total_collected += len(observations)
+            total_saved += saved
+            total_duplicates += duplicates
+            
+            page_time = time.time() - page_start
+            
+            # Estatísticas da página
+            print(f"\n   📊 ESTATÍSTICAS DA PÁGINA:")
+            print(f"   ├─ Observações encontradas: {len(observations)}")
+            print(f"   ├─ Novas salvas: {saved}")
+            print(f"   ├─ Duplicatas ignoradas: {duplicates}")
+            print(f"   └─ Tempo de processamento: {page_time:.2f}s")
+            
+            # Estatísticas gerais
+            elapsed_min = (time.time() - start_time) / 60
+            elapsed_sec = (time.time() - start_time)
+            pages_done = page - start_page + 1
+            progress = (pages_done / pages_to_collect) * 100
+            avg_time_per_page = elapsed_sec / pages_done if pages_done > 0 else 0
+            remaining_pages = total_pages - page
+            estimated_remaining_sec = remaining_pages * avg_time_per_page
+            estimated_remaining_min = estimated_remaining_sec / 60
+            
+            # Calcula ETA
+            eta = datetime.now() + timedelta(seconds=estimated_remaining_sec)
+            
+            print(f"\n   📈 PROGRESSO GERAL:")
+            print(f"   ├─ Páginas processadas: {pages_done:,} / {pages_to_collect:,} ({progress:.2f}%)")
+            print(f"   ├─ Total coletado: {total_collected:,} observações")
+            print(f"   ├─ Total salvo (novo): {total_saved:,} observações")
+            print(f"   ├─ Total duplicatas: {total_duplicates:,} observações")
+            print(f"   ├─ Páginas com erro: {total_errors}")
+            print(f"   └─ Taxa de sucesso: {((pages_done - total_errors) / pages_done * 100):.1f}%")
+            
+            print(f"\n   ⏱️  TEMPO:")
+            print(f"   ├─ Decorrido: {elapsed_min:.1f}min ({elapsed_sec:.0f}s)")
+            print(f"   ├─ Média por página: {avg_time_per_page:.2f}s")
+            print(f"   ├─ Estimativa restante: {estimated_remaining_min:.1f}min ({estimated_remaining_sec:.0f}s)")
+            print(f"   └─ ETA (previsão): {eta.strftime('%d/%m/%Y %H:%M:%S')}")
+            
+            # Barra de progresso visual
+            bar_length = 50
+            filled = int(bar_length * progress / 100)
+            bar = '█' * filled + '░' * (bar_length - filled)
+            print(f"\n   [{bar}] {progress:.2f}%")
         
-        # Estatísticas
-        elapsed = (time.time() - start_time) / 60  # minutos
-        pages_done = page - start_page + 1
-        progress = (pages_done / pages_to_collect) * 100
-        avg_time_per_page = elapsed / pages_done if pages_done > 0 else 0
-        remaining_pages = total_pages - page
-        estimated_remaining = (remaining_pages * avg_time_per_page)
-        
-        print(f"✅ {len(observations)} observações coletadas")
-        print(f"   💾 Salvos: {saved} novos | Total coletado: {total_collected:,} | Progresso: {page}/{total_pages} ({progress:.1f}%)")
-        print(f"   ⏱️  Tempo decorrido: {elapsed:.1f}min | Estimativa restante: {estimated_remaining:.1f}min")
         print()
         
         # Delay entre requisições
         if page < total_pages:
-            time.sleep(DELAY_BETWEEN_REQUESTS)
+            for i in range(DELAY_BETWEEN_REQUESTS, 0, -1):
+                print(f"\r   ⏸️  Aguardando {i}s antes da próxima página...", end="", flush=True)
+                time.sleep(1)
+            print("\r" + " " * 60 + "\r", end="", flush=True)
     
     # Resumo final
     total_time = (time.time() - start_time) / 60
