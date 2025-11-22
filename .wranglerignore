@@ -1,0 +1,95 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+.env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# Development files
+*.log
+*.pid
+nohup.out
+debug_*.py
+test_*.py
+*_test.py
+
+# Data files
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Documentation
+*.md
+docs/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Migration scripts (não necessários no worker)
+migrate_*.py
+clean_*.py
+debug_*.py
+historical_*.py
+improved_*.py
+robust_*.py
+reset_*.py
+sync_*.py
+run_*.py
+check_*.py
+deploy_*.sh
+run_*.sh
+reset_*.sh
+restart_*.sh
+
+# HTML debug files
+*.html
+
+# Backup files
+*.backup
+*.bak
+
+# Checkpoints
+*_checkpoint.json
+failed_pages.json
+
+# Shell scripts
+*.sh
+
+# Requirements (já processado)
+requirements.txt
+cf-requirements.txt
+
+# Wrangler configs de outros workers
+wrangler-scraper.toml
+wrangler.toml
+
+# GitHub workflows
+.github/
+
+# Outros arquivos Python não necessários
+scraper-worker.py
+monitor.py
+scheduler.py
+database.py
+scraper.py

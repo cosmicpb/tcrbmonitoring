@@ -72,20 +72,23 @@ def get_total_records():
     success, output = run_d1_command(sql, show_output=False)
     
     if success:
-        # Parse output para extrair número
         try:
-            # Output vem como tabela, extrair número
-            lines = output.strip().split('\n')
-            for line in lines:
-                if line.strip().isdigit():
-                    total = int(line.strip())
-                    print(f"✅ Total de registros: {total:,}")
-                    return total
-        except:
-            pass
+            # Parse JSON output do wrangler
+            import re
+            json_match = re.search(r'\[\s*\{.*?\}\s*\]', output, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+                if data and len(data) > 0 and 'results' in data[0]:
+                    results = data[0]['results']
+                    if results and len(results) > 0 and 'total' in results[0]:
+                        total = int(results[0]['total'])
+                        print(f"✅ Total de registros: {total:,}")
+                        return total
+        except Exception as e:
+            print(f"⚠️  Erro ao parsear total: {e}")
     
-    print("⚠️  Não foi possível contar registros, assumindo 628240")
-    return 628240
+    print("⚠️  Não foi possível contar registros, assumindo 629561")
+    return 629561
 
 def add_column():
     """Adiciona coluna jd_numeric"""
@@ -123,17 +126,26 @@ def migrate_data_batch(limit):
 
 def count_remaining_nulls():
     """Conta quantos registros ainda precisam ser migrados"""
-    sql = "SELECT COUNT(*) FROM observations WHERE jd_numeric IS NULL;"
+    sql = "SELECT COUNT(*) as remaining FROM observations WHERE jd_numeric IS NULL;"
     success, output = run_d1_command(sql, show_output=False)
     
     if success:
         try:
-            lines = output.strip().split('\n')
-            for line in lines:
-                if line.strip().isdigit():
-                    return int(line.strip())
-        except:
-            pass
+            # Parse JSON output do wrangler
+            import re
+            # Procura por padrão JSON no output
+            json_match = re.search(r'\[\s*\{.*?\}\s*\]', output, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+                if data and len(data) > 0 and 'results' in data[0]:
+                    results = data[0]['results']
+                    if results and len(results) > 0:
+                        # Pode ser 'remaining' ou 'COUNT(*)'
+                        for key in ['remaining', 'COUNT(*)']:
+                            if key in results[0]:
+                                return int(results[0][key])
+        except Exception as e:
+            print(f"⚠️  Erro ao parsear contagem: {e}")
     return 0
 
 def migrate_all_data(total_records):
