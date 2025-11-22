@@ -239,15 +239,23 @@ async def save_to_d1(env, data):
                 print(f"[SCRAPER] Observação já existe (JD: {data['jd']})")
                 return {'status': 'duplicate', 'message': 'Observação já existe'}
         
-        # Insere nova observação
+        # Converte jd para float para jd_numeric
+        try:
+            jd_numeric = float(data['jd'])
+        except (ValueError, TypeError):
+            print(f"[SCRAPER] ⚠️  Erro ao converter JD para float: {data['jd']}")
+            jd_numeric = None
+        
+        # Insere nova observação (incluindo jd_numeric)
         insert_query = """
-        INSERT INTO observations (star, jd, calendar_date, magnitude, error, filter, observer, scraped_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO observations (star, jd, jd_numeric, calendar_date, magnitude, error, filter, observer, scraped_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         await env.DB.prepare(insert_query).bind(
             data['star'],
             data['jd'],
+            jd_numeric,
             data['calendar_date'],
             data['magnitude'],
             data['error'],
@@ -256,7 +264,7 @@ async def save_to_d1(env, data):
             data['scraped_at']
         ).run()
         
-        print(f"[SCRAPER] ✅ Nova observação salva no D1")
+        print(f"[SCRAPER] ✅ Nova observação salva no D1 (JD: {data['jd']}, jd_numeric: {jd_numeric})")
         return {'status': 'saved', 'message': 'Nova observação salva'}
         
     except Exception as e:
