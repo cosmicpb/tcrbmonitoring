@@ -11,6 +11,9 @@ compatibility_flags = ["python_workers"]
 [vars]
 ENVIRONMENT = "production"
 WORKER_TYPE = "api"
+RATE_LIMIT_ENABLED = true
+RATE_LIMIT_MAX_REQUESTS = 100
+RATE_LIMIT_WINDOW = 60
 
 # Observability - Logs
 [observability]
@@ -26,3 +29,8 @@ invocation_logs = true
 binding = "DB"
 database_name = "tcrb-observations"
 database_id = "6440d190-a746-4b7a-8906-17cab3fe2df7"
+
+# KV Namespace para Rate Limiting
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "c80aebc59fe6420881208b290e78acbb"

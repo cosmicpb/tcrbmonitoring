@@ -1,21 +1,22 @@
--- Schema atualizado para D1 - T CrB Monitoring
--- Alinhado com o scraper histórico
+-- Schema correto para D1 - T CrB Monitoring
+-- Alinhado com o schema real do D1 em produção
 
 CREATE TABLE IF NOT EXISTS observations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     star TEXT NOT NULL,
-    date_original TEXT NOT NULL,
-    date_br TEXT NOT NULL,
-    magnitude REAL NOT NULL,
-    error REAL,
-    band TEXT,
+    jd TEXT NOT NULL,
+    calendar_date TEXT NOT NULL,
+    magnitude TEXT NOT NULL,
+    error TEXT,
+    filter TEXT,
     observer TEXT,
+    scraped_at TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(star, date_original, magnitude, band, observer)
+    UNIQUE(star, jd, magnitude, filter, observer)
 );
 
 -- Índices para melhor performance
-CREATE INDEX IF NOT EXISTS idx_star_date ON observations(star, date_br);
+CREATE INDEX IF NOT EXISTS idx_jd ON observations(jd);
+CREATE INDEX IF NOT EXISTS idx_calendar_date ON observations(calendar_date);
+CREATE INDEX IF NOT EXISTS idx_star ON observations(star);
 CREATE INDEX IF NOT EXISTS idx_magnitude ON observations(magnitude);
-CREATE INDEX IF NOT EXISTS idx_band ON observations(band);
-CREATE INDEX IF NOT EXISTS idx_date_original ON observations(date_original);
