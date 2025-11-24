@@ -1,135 +1,141 @@
-#!/usr/bin/env python3
 """
-Debug: Por que 3 observações não foram salvas?
-JDs: 2460987.552916, 2460987.552081, 2460987.551311
+Debug: Por que algumas observações não são coletadas?
+Analisa o HTML das observações problemáticas
 """
 
-import requests
-from bs4 import BeautifulSoup
-import sqlite3
+# HTML das 3 observações
+obs_6 = """<tr class="obs tr-even" id="ob-6">
+  
+  
+  <td class="empty" colspan="3"></td>
+  
 
-BASE_URL = "https://apps.aavso.org/webobs/results/"
-PARAMS = {
-    'star': 't crb',
-    'num_results': '200',
-    'obs_types': 'all',
-    'page': 1
-}
+  <td>T CrB</td>
+  <td>2461002.24360764</td>
+  <td>2025 Nov. 22.74361</td>
+  
+  <td><a target="_blank" href="https://www.aavso.org/LCGv2/index.htm?DateFormat=Julian&amp;RequestedBands=&amp;view=api.delim&amp;ident=000-BBW-825&amp;fromjd=2460902.24360764&amp;tojd=2461102.24360764&amp;delimiter=@@@">11.0255</a></td>
+  
+  <td>0.0782</td>
+  <td>TB</td>
+  <td>MCHB</td>
+  <td><a href="#" class="obs-link" id="ob-6">Details...</a>
+  </td>
+</tr>"""
 
-DB_PATH = 'data/tcrb_observations.db'
+obs_7 = """<tr class="obs tr-odd" id="ob-7">
+  
+  
+  <td class="empty" colspan="3"></td>
+  
 
-missing_jds = [2460987.552916, 2460987.552081, 2460987.551311]
+  <td>T CrB</td>
+  <td>2461002.24360764</td>
+  <td>2025 Nov. 22.74361</td>
+  
+  <td><a target="_blank" href="https://www.aavso.org/LCGv2/index.htm?DateFormat=Julian&amp;RequestedBands=&amp;view=api.delim&amp;ident=000-BBW-825&amp;fromjd=2460902.24360764&amp;tojd=2461102.24360764&amp;delimiter=@@@">9.9277</a></td>
+  
+  <td>0.0509</td>
+  <td>TG</td>
+  <td>MCHB</td>
+  <td><a href="#" class="obs-link" id="ob-7">Details...</a>
+  </td>
+</tr>"""
 
-print("=" * 80)
-print("DEBUG: Observações Faltando")
-print("=" * 80)
+obs_8 = """<tr class="obs tr-even" id="ob-8">
+  
+  
+  <td class="empty" colspan="3"></td>
+  
 
-# 1. Verificar no banco
-print("\n1. Verificando no banco de dados...")
-conn = sqlite3.connect(DB_PATH)
-cursor = conn.cursor()
+  <td>T CrB</td>
+  <td>2461002.24360764</td>
+  <td>2025 Nov. 22.74361</td>
+  
+  <td><a target="_blank" href="https://www.aavso.org/LCGv2/index.htm?DateFormat=Julian&amp;RequestedBands=&amp;view=api.delim&amp;ident=000-BBW-825&amp;fromjd=2460902.24360764&amp;tojd=2461102.24360764&amp;delimiter=@@@">9.225</a></td>
+  
+  <td>0.0416</td>
+  <td>TR</td>
+  <td>MCHB</td>
+  <td><a href="#" class="obs-link" id="ob-8">Details...</a>
+  </td>
+</tr>"""
 
-for jd in missing_jds:
-    cursor.execute("SELECT * FROM observations WHERE jd = ?", (jd,))
-    result = cursor.fetchone()
-    if result:
-        print(f"   ✓ JD {jd}: ENCONTRADO no banco")
-    else:
-        print(f"   ✗ JD {jd}: NÃO ENCONTRADO no banco")
 
-conn.close()
-
-# 2. Buscar no HTML
-print("\n2. Buscando no HTML da página 1...")
-session = requests.Session()
-session.headers.update({
-    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
-})
-
-response = session.get(BASE_URL, params=PARAMS, timeout=30)
-soup = BeautifulSoup(response.content, 'html.parser')
-
-table = soup.find('table', class_='observations')
-if not table:
-    print("   ✗ Tabela não encontrada!")
-    exit(1)
-
-# Encontra todas as linhas
-all_rows = table.find_all('tr', class_='obs')
-obs_rows = [row for row in all_rows if 'obs-detail-tr' not in row.get('class', [])]
-
-print(f"   Total de linhas: {len(obs_rows)}")
-
-# Procura pelas observações faltando
-print("\n3. Analisando linhas com JDs faltando...")
-for jd in missing_jds:
-    print(f"\n   JD: {jd}")
-    found = False
+def parse_row(row_html, obs_id):
+    """Simula o parser do scraper"""
+    print(f"\n{'='*60}")
+    print(f"Analisando {obs_id}")
+    print(f"{'='*60}")
     
-    for i, row in enumerate(obs_rows):
-        cells = row.find_all('td')
+    # Extrai células (mesmo algoritmo do scraper)
+    cells = []
+    cell_pos = 0
+    while True:
+        td_start = row_html.find('<td', cell_pos)
+        if td_start == -1:
+            break
+        td_end = row_html.find('</td>', td_start)
+        cell_content = row_html[td_start:td_end + 5]
         
-        # Procura pela célula com o JD
-        for cell in cells:
-            cell_text = cell.get_text(strip=True)
-            if str(jd) in cell_text:
-                found = True
-                print(f"   ✓ Encontrado na linha {i}")
-                
-                # Mostra todas as células
-                all_cells = [c.get_text(strip=True) for c in cells]
-                print(f"   Células totais: {len(cells)}")
-                print(f"   Células não vazias: {len([c for c in all_cells if c])}")
-                
-                # Remove células vazias
-                non_empty = [c for c in all_cells if c]
-                print(f"   Dados: {non_empty}")
-                
-                # Tenta fazer parse
-                try:
-                    # Remove células vazias do início
-                    data_cells = non_empty
-                    
-                    if len(data_cells) >= 7:
-                        star = data_cells[0]
-                        jd_val = data_cells[1]
-                        cal_date = data_cells[2]
-                        mag = data_cells[3]
-                        error = data_cells[4]
-                        band = data_cells[5]
-                        observer = data_cells[6]
-                        
-                        # Remove "Details..." do observer
-                        if 'Details' in observer:
-                            observer = observer.split('Details')[0].strip()
-                        
-                        print(f"   Parse:")
-                        print(f"     Star: {star}")
-                        print(f"     JD: {jd_val}")
-                        print(f"     Date: {cal_date}")
-                        print(f"     Mag: {mag}")
-                        print(f"     Error: {error if error and error != '—' else 'NULL'}")
-                        print(f"     Band: {band}")
-                        print(f"     Observer: {observer}")
-                        
-                        # Tenta converter
-                        try:
-                            jd_float = float(jd_val)
-                            mag_float = float(mag)
-                            print(f"   ✓ Conversão OK: JD={jd_float}, Mag={mag_float}")
-                        except ValueError as e:
-                            print(f"   ✗ Erro na conversão: {e}")
-                    else:
-                        print(f"   ✗ Número insuficiente de células: {len(data_cells)}")
-                        
-                except Exception as e:
-                    print(f"   ✗ Erro no parse: {e}")
-                
+        text_start = cell_content.find('>')
+        text = cell_content[text_start + 1:].replace('</td>', '')
+        
+        # Remove tags HTML
+        while '<' in text:
+            tag_start = text.find('<')
+            tag_end = text.find('>', tag_start)
+            if tag_end == -1:
                 break
+            text = text[:tag_start] + text[tag_end + 1:]
+        
+        cells.append(text.strip())
+        cell_pos = td_end + 5
     
-    if not found:
-        print(f"   ✗ NÃO encontrado no HTML!")
+    print(f"\nTotal de células: {len(cells)}")
+    for i, cell in enumerate(cells):
+        print(f"  Célula {i}: '{cell}' (vazia: {not cell})")
+    
+    # Remove células vazias
+    non_empty_cells = [cell for cell in cells if cell]
+    print(f"\nCélulas não-vazias: {len(non_empty_cells)}")
+    for i, cell in enumerate(non_empty_cells):
+        print(f"  {i}: '{cell}'")
+    
+    # Verifica se passa no filtro
+    if len(non_empty_cells) < 7:
+        print(f"\n❌ REJEITADO: Menos de 7 células não-vazias ({len(non_empty_cells)})")
+        return None
+    else:
+        print(f"\n✅ ACEITO: {len(non_empty_cells)} células não-vazias")
+        
+        # Monta dados
+        observer = non_empty_cells[6]
+        if 'Details' in observer:
+            observer = observer.split('Details')[0].strip()
+        
+        data = {
+            'star': non_empty_cells[0],
+            'jd': non_empty_cells[1],
+            'calendar_date': non_empty_cells[2],
+            'magnitude': non_empty_cells[3],
+            'error': non_empty_cells[4],
+            'filter': non_empty_cells[5],
+            'observer': observer
+        }
+        
+        print(f"\nDados extraídos:")
+        for key, value in data.items():
+            print(f"  {key}: {value}")
+        
+        return data
 
-print("\n" + "=" * 80)
-print("DEBUG CONCLUÍDO")
-print("=" * 80)
+
+# Testa as 3 observações
+parse_row(obs_6, "ob-6 (COLETADO)")
+parse_row(obs_7, "ob-7 (NÃO COLETADO)")
+parse_row(obs_8, "ob-8 (NÃO COLETADO)")
+
+print(f"\n{'='*60}")
+print("ANÁLISE COMPLETA")
+print(f"{'='*60}")
